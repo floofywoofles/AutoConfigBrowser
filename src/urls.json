@@ -1,5 +1,6 @@
 {
     "urls": [
-        "https://github.com/gorhill/uBlock/releases/download/1.68.0/uBlock0_1.68.0.firefox.signed.xpi"
+        "https://addons.mozilla.org/firefox/downloads/file/4629131/ublock_origin-1.68.0.xpi",
+        "https://addons.mozilla.org/firefox/downloads/file/4633659/bitwarden_password_manager-2025.11.2.xpi"
     ]
 }
