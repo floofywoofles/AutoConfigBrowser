@@ -2,7 +2,8 @@
 const xpiModule = require("xpi");
 import { tmpdir } from "os";
 import { join, resolve } from "path";
-import { existsSync, mkdirSync, statSync, copyFileSync } from "fs";
+import { existsSync, copyFileSync } from "fs";
+import { getFirefoxExtensionsDirectory } from "./profile-discovery";
 
 // Download the xpi files from the urls in the urls.json file
 const urlsFile = Bun.file("./src/urls.json");
@@ -51,87 +52,6 @@ async function getExtensionId(xpiFilePath: string): Promise<string> {
     throw new Error("Could not find extension ID in manifest.json");
 }
 
-/**
- * Finds and validates the Firefox extensions directory
- * Parses profiles.ini to find the default profile and returns the extensions directory path
- * @returns The path to the Firefox extensions directory
- * @throws Error if profiles.ini is missing, empty, or profile/extensions directory not found
- */
-async function getFirefoxExtensionsDirectory(): Promise<string> {
-    const profilesIniPath = resolve(process.env.HOME || "", ".mozilla/firefox/profiles.ini");
-    if (!existsSync(profilesIniPath)) {
-        throw new Error("profiles.ini file not found");
-    }
-    const profilesContent = await Bun.file(profilesIniPath).text();
-    if (!profilesContent) {
-        throw new Error("profiles.ini file is empty");
-    }
-    // Parse profiles.ini to find the default profile
-    // Format: [Install...] section has Default=profileName
-    // Or [ProfileX] sections have Path=profileName and Default=1
-    let profileName: string | null = null;
-    const lines = profilesContent.split("\n");
-    // First, try to find Default= in [Install...] section
-    let inInstallSection = false;
-    for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (trimmedLine.startsWith("[Install")) {
-            inInstallSection = true;
-        } else if (trimmedLine.startsWith("[")) {
-            inInstallSection = false;
-        } else if (inInstallSection && trimmedLine.startsWith("Default=")) {
-            const parts = trimmedLine.split("=");
-            const defaultValue = parts[1];
-            if (defaultValue !== undefined) {
-                profileName = defaultValue.trim();
-                break;
-            }
-        }
-    }
-    // If not found, look for profile with Default=1
-    if (!profileName) {
-        let currentProfilePath: string | null = null;
-        for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (trimmedLine.startsWith("[Profile")) {
-                currentProfilePath = null;
-            } else if (trimmedLine.startsWith("Path=")) {
-                const parts = trimmedLine.split("=");
-                const pathValue = parts[1];
-                if (pathValue !== undefined) {
-                    currentProfilePath = pathValue.trim();
-                }
-            } else if (trimmedLine.startsWith("Default=1") && currentProfilePath) {
-                profileName = currentProfilePath;
-                break;
-            }
-        }
-    }
-    if (!profileName) {
-        throw new Error("Could not find default profile in profiles.ini");
-    }
-    // Resolve the profile directory (handle both relative and absolute paths)
-    const firefoxDir = resolve(process.env.HOME || "", ".mozilla/firefox");
-    const profileDirectory = resolve(firefoxDir, profileName);
-    const xpiDirectory = resolve(profileDirectory, "extensions");
-    // Check if profile directory exists
-    if (!existsSync(profileDirectory)) {
-        throw new Error(`Profile directory not found: ${profileDirectory}`);
-    }
-    // Check if extensions directory exists, create it if it doesn't
-    if (!existsSync(xpiDirectory)) {
-        console.log(`Creating extensions directory: ${xpiDirectory}`);
-        mkdirSync(xpiDirectory, { recursive: true });
-    } else {
-        // Verify it's actually a directory
-        const stats = statSync(xpiDirectory);
-        if (!stats.isDirectory()) {
-            throw new Error(`extensions path exists but is not a directory: ${xpiDirectory}`);
-        }
-    }
-    console.log(`Extensions directory ready: ${xpiDirectory}`);
-    return xpiDirectory;
-}
 
 /**
  * Processes an XPI file using the xpi package's SourceEmitter
